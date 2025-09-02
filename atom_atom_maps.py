@@ -8,22 +8,23 @@ from yaml import load, Loader
 
 def parse_atom_definition(s: str) -> Dict[str, Union[int, str, List, None]]:
     # https://reactionmechanismgenerator.github.io/RMG-Py/reference/molecule/adjlist.html#rmgpy-molecule-adjlist
-    # TODO: site, morphology
-    pattern = r'^(\d+)(?:\s+\*(\d*)\b)?\s+([A-Z][a-z]?)\s+(u\d+)(?:\s+(p\d+))?(?:\s+(c[-+]?\d+))?(?:\s+(\{\d+,\s*.*\}(?:\s+\{\d+,\s*.*\})*))?$'
+    pattern = r'^(\d+)(?:\s+\*(\d*)\b)?\s+([A-Z][a-z]?)\s+(u\d+)(?:\s+(p\d+))?(?:\s+(c[-+]?\d+))?(s.*)?(m.*)?(?:\s+(\{\d+,\s*.*\}(?:\s+\{\d+,\s*.*\})*))?$'
     match = re.match(pattern, s.strip())
     if not match:
         raise ValueError("Invalid atom definition: " + s)
     groups = match.groups()
-    bonds = [tuple(x.strip() for x in bond.strip('{}').split(',')) for bond in re.split(r'}\s+\{', groups[6])] if \
-    groups[6] is not None else []
+    bonds = [tuple(x.strip() for x in bond.strip('{}').split(',')) for bond in re.split(r'}\s+\{', groups[8])] if \
+    groups[8] is not None else []
     bonds = [(int(x[0]), x[1]) for x in bonds]
     return {
         'number': int(groups[0]),
         'label': int(groups[1]) if groups[1] is not None else None,
         'element': groups[2],
-        'unpaired': int(groups[3][1::]),
-        'pairs': int(groups[4][1::]) if groups[4] is not None else None,
-        'charge': int(groups[5][1::]) if groups[5] is not None else None,
+        'unpaired': groups[3],
+        'pairs': groups[4],
+        'charge': groups[5],
+        'site': groups[6],
+        'morphology': groups[7],
         'bonds': bonds
     }
 
@@ -33,11 +34,15 @@ def atom_definition_to_string(atom) -> str:
     if atom['label'] is not None:
         data.append('*' + str(atom['label']))
     data.append(atom['element'])
-    data.append('u' + str(atom['unpaired']))
+    data.append(atom['unpaired'])
     if atom['pairs'] is not None:
-        data.append('p' + str(atom['pairs']))
+        data.append(atom['pairs'])
     if atom['charge'] is not None:
-        data.append('c' + str(atom['charge']))
+        data.append(atom['charge'])
+    if atom['site'] is not None:
+        data.append(atom['site'])
+    if atom['morphology'] is not None:
+        data.append(atom['morphology'])
     for bond in atom['bonds']:
         data.append('{%s,%s}' % (bond[0], bond[1]))
     return ' '.join(data)
@@ -49,7 +54,7 @@ def main():
     parser.add_argument('--output', default='atom-atom-maps.json', help='Path to the output atom-atom-maps.json')
     args = parser.parse_args()
     output = []
-    with open(args.reactions, 'r') as f:
+    with open(args.input, 'r') as f:
         data = load(f, Loader=Loader)
         for reaction in data['reactions']:
             if 'reactant' in reaction and 'product' in reaction:
@@ -91,6 +96,7 @@ def main():
                     reactant_atom['unpaired'] = product_atom['unpaired']
                     reactant_atom['pairs'] = product_atom['pairs']
                     reactant_atom['charge'] = product_atom['charge']
+                    # TODO: site and morphology mapping?
                     bonds = [b for b in reactant_atom['bonds'] if b[0] not in reactant_number_id_map]
                     for bond in product_atom['bonds']:
                         if bond[0] in product_number_id_map:
