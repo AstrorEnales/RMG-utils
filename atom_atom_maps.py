@@ -6,27 +6,38 @@ from typing import List, Dict, Union
 from yaml import load, Loader
 
 
-def parse_atom_definition(s: str) -> Dict[str, Union[int, str, List, None]]:
-    # https://reactionmechanismgenerator.github.io/RMG-Py/reference/molecule/adjlist.html#rmgpy-molecule-adjlist
-    pattern = r'^(\d+)(?:\s+\*(\d*)\b)?\s+([A-Z][a-z]?)\s+(u\d+)(?:\s+(p\d+))?(?:\s+(c[-+]?\d+))?(s.*)?(m.*)?(?:\s+(\{\d+,\s*.*\}(?:\s+\{\d+,\s*.*\})*))?$'
-    match = re.match(pattern, s.strip())
-    if not match:
-        raise ValueError("Invalid atom definition: " + s)
-    groups = match.groups()
-    bonds = [tuple(x.strip() for x in bond.strip('{}').split(',')) for bond in re.split(r'}\s+\{', groups[8])] if \
-    groups[8] is not None else []
-    bonds = [(int(x[0]), x[1]) for x in bonds]
-    return {
-        'number': int(groups[0]),
-        'label': int(groups[1]) if groups[1] is not None else None,
-        'element': groups[2],
-        'unpaired': groups[3],
-        'pairs': groups[4],
-        'charge': groups[5],
-        'site': groups[6],
-        'morphology': groups[7],
-        'bonds': bonds
-    }
+def parse_atom_definitions(adj_list: List[str]) -> List[Dict[str, Union[int, str, List, None]]]:
+    asterisk_label = 900
+    result = []
+    for line in adj_list:
+        # https://reactionmechanismgenerator.github.io/RMG-Py/reference/molecule/adjlist.html#rmgpy-molecule-adjlist
+        pattern = r'^(\d+)(?:\s+(\*\d*))?\s+([A-Z][a-z]?)\s+(u\d+)(?:\s+(p\d+))?(?:\s+(c[-+]?\d+))?(s.*)?(m.*)?(?:\s+(\{\d+,\s*.*\}(?:\s+\{\d+,\s*.*\})*))?$'
+        match = re.match(pattern, line.strip())
+        if not match:
+            raise ValueError("Invalid atom definition: " + line)
+        groups = match.groups()
+        bonds = [tuple(x.strip() for x in bond.strip('{}').split(',')) for bond in re.split(r'}\s+\{', groups[8])] if \
+            groups[8] is not None else []
+        bonds = [(int(x[0]), x[1]) for x in bonds]
+        label = None
+        if groups[1] is not None:
+            if groups[1] == '*':
+                label = asterisk_label
+                asterisk_label += 1
+            else:
+                label = int(groups[1][1::])
+        result.append({
+            'number': int(groups[0]),
+            'label': label,
+            'element': groups[2],
+            'unpaired': groups[3],
+            'pairs': groups[4],
+            'charge': groups[5],
+            'site': groups[6],
+            'morphology': groups[7],
+            'bonds': bonds
+        })
+    return result
 
 
 def atom_definition_to_string(atom) -> str:
@@ -58,16 +69,9 @@ def main():
         data = load(f, Loader=Loader)
         for reaction in data['reactions']:
             if 'reactant' in reaction and 'product' in reaction:
-                reactants_graph = [
-                    parse_atom_definition(x.strip())
-                    for x in reaction['reactant'].split('\n')
-                    if x.strip() != ''
-                ]
-                products_graph = [
-                    parse_atom_definition(x.strip())
-                    for x in reaction['product'].split('\n')
-                    if x.strip() != ''
-                ]
+                reactants_graph = parse_atom_definitions(
+                    [x for x in reaction['reactant'].split('\n') if x.strip() != ''])
+                products_graph = parse_atom_definitions([x for x in reaction['product'].split('\n') if x.strip() != ''])
 
                 reactant_id_index_map = {
                     atom['label']: i
