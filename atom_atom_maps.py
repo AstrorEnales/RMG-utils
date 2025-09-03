@@ -107,7 +107,7 @@ def main():
                             bond_target_id = product_number_id_map[bond[0]]
                             bond_mapped_number = mapped_products_graph[reactant_id_index_map[bond_target_id]]['number']
                             bonds.append((bond_mapped_number, bond[1]))
-                    reactant_atom['bonds'] = product_atom['bonds']
+                    reactant_atom['bonds'] = bonds
                 max_id = max(reactant_id_index_map.keys())
                 for i, atom in enumerate(mapped_products_graph):
                     if atom['label'] is None:
